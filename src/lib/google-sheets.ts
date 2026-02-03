@@ -7,7 +7,8 @@ const SHEET_ID = process.env.GOOGLE_SHEETS_ID || '1L5KUiI3d0Wx-drx17Jq_xBSTUTSI9
 
 // Column mapping for "CommonCents Content Repo"
 // A=Blog Post (name), B=Title, C=Category, D=Meta Title, E=Meta Description,
-// F=Slug, G=Primary Keyword, H=Status, I=Blog Link (Drive doc URL), J=Photo Link, K=WordPress ID
+// F=Slug, G=Primary Keyword, H=Status, I=Featured Image Alt, J=Post Date,
+// K=Blog Link (Drive doc URL), L=Photo Link, M=WordPress ID
 export interface SheetRow {
   rowIndex: number;      // 1-based row index in sheet (for updates)
   blogPost: string;      // Column A - document name in Drive
@@ -18,9 +19,11 @@ export interface SheetRow {
   slug: string;          // Column F
   primaryKeyword: string; // Column G
   status: string;        // Column H
-  blogLink: string;      // Column I
-  photoLink: string;     // Column J - Google Drive link to featured image
-  wordpressId: string;   // Column K - WordPress post ID
+  featuredImageAlt: string; // Column I
+  postDate: string;      // Column J
+  blogLink: string;      // Column K
+  photoLink: string;     // Column L - Google Drive link to featured image
+  wordpressId: string;   // Column M - WordPress post ID
 }
 
 async function getSheetsClient(accessToken: string) {
@@ -38,7 +41,7 @@ export async function getContentRepoData(accessToken: string): Promise<SheetRow[
   try {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'A:K', // Columns A through K
+      range: 'A:M', // Columns A through M
     });
 
     const rows = response.data.values || [];
@@ -58,9 +61,11 @@ export async function getContentRepoData(accessToken: string): Promise<SheetRow[
       slug: row[5] || '',
       primaryKeyword: row[6] || '',
       status: row[7] || '',
-      blogLink: row[8] || '',
-      photoLink: row[9] || '',
-      wordpressId: row[10] || '',
+      featuredImageAlt: row[8] || '',
+      postDate: row[9] || '',
+      blogLink: row[10] || '',
+      photoLink: row[11] || '',
+      wordpressId: row[12] || '',
     }));
   } catch (error) {
     console.error('Error fetching sheet data:', error);
@@ -70,8 +75,8 @@ export async function getContentRepoData(accessToken: string): Promise<SheetRow[
 
 /**
  * Updates a row's status and WordPress ID after publishing
- * Column H = Status, Column K = WordPress ID
- * (Column I contains the Drive doc link - don't overwrite it)
+ * Column H = Status, Column M = WordPress ID
+ * (Column K contains the Drive doc link - don't overwrite it)
  */
 export async function updateRowAfterPublish(
   accessToken: string,
@@ -82,14 +87,14 @@ export async function updateRowAfterPublish(
   const sheets = await getSheetsClient(accessToken);
 
   try {
-    // Update columns H (status) and K (WordPress ID)
+    // Update columns H (status) and M (WordPress ID)
     const updates: { range: string; values: string[][] }[] = [
       {
         range: `H${rowIndex}`,
         values: [[status]],
       },
       {
-        range: `K${rowIndex}`,
+        range: `M${rowIndex}`,
         values: [[wordpressId.toString()]],
       },
     ];

@@ -85,14 +85,14 @@ export async function downloadFile(
 
 /**
  * Extracts the file ID from various Google Drive URL formats
- * Supports: /file/d/ID, /open?id=ID, id=ID query param
+ * Supports: /file/d/ID, /document/d/ID, /spreadsheets/d/ID, /open?id=ID, id=ID query param
  */
 export function extractDriveFileId(driveUrl: string): string | null {
   if (!driveUrl) return null;
 
-  // Handle /file/d/FILE_ID format
-  const fileMatch = driveUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (fileMatch) return fileMatch[1];
+  // Handle /file/d/FILE_ID, /document/d/FILE_ID, /spreadsheets/d/FILE_ID formats
+  const docMatch = driveUrl.match(/\/(?:file|document|spreadsheets)\/d\/([a-zA-Z0-9_-]+)/);
+  if (docMatch) return docMatch[1];
 
   // Handle /open?id=FILE_ID format
   const openMatch = driveUrl.match(/\/open\?id=([a-zA-Z0-9_-]+)/);

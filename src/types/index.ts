@@ -42,19 +42,6 @@ export interface DocumentMetadata {
   metadataSource?: 'sheet' | 'ai' | 'manual';
 }
 
-export interface SheetRow {
-  blogPost: string;
-  title: string;
-  category: string;
-  metaTitle: string;
-  metaDescription: string;
-  slug: string;
-  primaryKeyword: string;
-  status: string;
-  blogLink: string;
-  photoLink: string;
-}
-
 export interface WordPressPost {
   id?: number;
   title: string;

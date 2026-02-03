@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authOptions, getAccessTokenFromRefreshToken } from '@/lib/auth';
 import { getContentRepoData, updateRowAfterPublish, sheetRowToMetadata, SheetRow } from '@/lib/google-sheets';
 import { getDocumentContent, extractDriveFileId } from '@/lib/google-drive';
 import { processDocument, extractTitleFromContent } from '@/lib/document-processor';
@@ -44,7 +44,7 @@ async function publishRow(
     // 1. Get document content from Drive
     const driveFileId = extractDriveFileId(row.blogLink);
     if (!driveFileId) {
-      result.error = 'No valid Drive link in Column I';
+      result.error = 'No valid Drive link in Column K (Blog Link)';
       return result;
     }
 
@@ -161,25 +161,29 @@ async function publishRow(
  * - Manual trigger from admin UI
  */
 export async function GET(request: NextRequest) {
-  // Check for API key for external/cron calls
+  // Check for API key or Vercel cron secret
   const apiKey = request.headers.get('x-api-key');
   const expectedKey = process.env.AUTO_PUBLISH_API_KEY;
+  const cronSecret = request.headers.get('authorization')?.replace('Bearer ', '');
+  const isVercelCron = cronSecret && cronSecret === process.env.CRON_SECRET;
 
-  // Allow either: valid session OR valid API key
+  // Allow: valid session, valid API key, or Vercel cron
   const session = await getServerSession(authOptions);
-  const accessToken = (session as any)?.accessToken;
+  let accessToken = (session as any)?.accessToken;
 
-  if (!accessToken && (!apiKey || apiKey !== expectedKey)) {
+  if (!accessToken && !isVercelCron && (!apiKey || apiKey !== expectedKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // For API key auth, we need a service account token
-  // For now, require session-based auth
+  // For cron/API key auth, get token from stored refresh token
   if (!accessToken) {
-    return NextResponse.json(
-      { error: 'Session required. Visit /api/auto-publish while logged in, or set up service account.' },
-      { status: 401 }
-    );
+    accessToken = await getAccessTokenFromRefreshToken();
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: 'Could not obtain Google access token. Set GOOGLE_REFRESH_TOKEN env var.' },
+        { status: 500 }
+      );
+    }
   }
 
   try {
@@ -241,7 +245,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  const accessToken = (session as any)?.accessToken;
+  let accessToken = (session as any)?.accessToken;
 
   // Check API key for external calls
   const apiKey = request.headers.get('x-api-key');
@@ -251,11 +255,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // For API key auth, get token from stored refresh token
   if (!accessToken) {
-    return NextResponse.json(
-      { error: 'Session required for publishing' },
-      { status: 401 }
-    );
+    accessToken = await getAccessTokenFromRefreshToken();
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: 'Could not obtain Google access token. Set GOOGLE_REFRESH_TOKEN env var.' },
+        { status: 500 }
+      );
+    }
   }
 
   try {
