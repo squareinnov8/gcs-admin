@@ -1,4 +1,4 @@
-import { extractDriveFileId, getFileMetadata, downloadFile } from './google-drive';
+import { extractDriveFileId, extractDriveFolderId, findImageInFolder, getFileMetadata, downloadFile } from './google-drive';
 import { uploadMedia } from './wordpress';
 
 export interface DownloadedImage {
@@ -25,24 +25,43 @@ export async function downloadFeaturedImage(
   photoLink: string
 ): Promise<DownloadedImage> {
   try {
-    // Step 1: Extract file ID from the Drive URL
-    const fileId = extractDriveFileId(photoLink);
+    let fileId = extractDriveFileId(photoLink);
+    let metadata;
+
+    // Check if the link is a folder — if so, find the first image inside it
     if (!fileId) {
-      return {
-        success: false,
-        error: `Could not extract file ID from photo link: ${photoLink}`,
-      };
+      const folderId = extractDriveFolderId(photoLink);
+      if (folderId) {
+        console.log(`Photo link is a folder, searching for image in folder: ${folderId}`);
+        const imageFile = await findImageInFolder(accessToken, folderId);
+        if (!imageFile) {
+          return {
+            success: false,
+            error: `No image found in Drive folder: ${photoLink}`,
+          };
+        }
+        fileId = imageFile.id;
+        metadata = imageFile;
+        console.log(`Found image in folder: ${imageFile.name} (${imageFile.mimeType})`);
+      } else {
+        return {
+          success: false,
+          error: `Could not extract file or folder ID from photo link: ${photoLink}`,
+        };
+      }
     }
 
-    // Step 2: Get file metadata from Drive
-    const metadata = await getFileMetadata(accessToken, fileId);
+    // Get file metadata if we don't already have it (direct file link case)
+    if (!metadata) {
+      metadata = await getFileMetadata(accessToken, fileId!);
 
-    // Validate it's an image
-    if (!metadata.mimeType.startsWith('image/')) {
-      return {
-        success: false,
-        error: `File is not an image: ${metadata.mimeType}`,
-      };
+      // Validate it's an image
+      if (!metadata.mimeType.startsWith('image/')) {
+        return {
+          success: false,
+          error: `File is not an image: ${metadata.mimeType}`,
+        };
+      }
     }
 
     // Step 3: Download the file from Drive

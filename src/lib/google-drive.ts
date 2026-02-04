@@ -110,6 +110,42 @@ export function extractDriveFileId(driveUrl: string): string | null {
   return null;
 }
 
+/**
+ * Extracts a folder ID from a Google Drive folder URL
+ * Returns null if the URL is not a folder link
+ */
+export function extractDriveFolderId(driveUrl: string): string | null {
+  if (!driveUrl) return null;
+  const match = driveUrl.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Finds the first image file in a Google Drive folder
+ */
+export async function findImageInFolder(
+  accessToken: string,
+  folderId: string
+): Promise<DriveFileMetadata | null> {
+  const drive = await getDriveClient(accessToken);
+
+  const response = await drive.files.list({
+    q: `'${folderId}' in parents and mimeType contains 'image/' and trashed = false`,
+    fields: 'files(id, name, mimeType)',
+    pageSize: 1,
+    orderBy: 'createdTime desc',
+  });
+
+  const files = response.data.files || [];
+  if (files.length === 0) return null;
+
+  return {
+    id: files[0].id!,
+    name: files[0].name!,
+    mimeType: files[0].mimeType!,
+  };
+}
+
 export interface DriveFileMetadata {
   id: string;
   name: string;
