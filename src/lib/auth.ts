@@ -80,8 +80,6 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, account }) {
       // On initial sign-in, capture all token data
       if (account) {
-        // TODO: Remove after capturing refresh token for GOOGLE_REFRESH_TOKEN env var
-        console.log('[AUTH] Refresh token for env var:', account.refresh_token);
         return {
           ...token,
           accessToken: account.access_token,
