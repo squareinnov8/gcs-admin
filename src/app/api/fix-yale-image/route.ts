@@ -26,19 +26,23 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 1. Find "post 5.jpg" in the folder
+    // 1. List all files in the folder
     const drive = await getDriveClient(accessToken);
     const response = await drive.files.list({
-      q: `'${YALE_FOLDER_ID}' in parents and name contains 'post 5' and trashed = false`,
+      q: `'${YALE_FOLDER_ID}' in parents and trashed = false`,
       fields: 'files(id, name, mimeType)',
     });
 
     const files = response.data.files || [];
-    if (files.length === 0) {
-      return NextResponse.json({ error: 'post 5.jpg not found in folder' }, { status: 404 });
-    }
 
-    const imageFile = files[0];
+    // Find "post 5" (case-insensitive)
+    const imageFile = files.find(f => f.name?.toLowerCase().includes('post 5'));
+    if (!imageFile) {
+      return NextResponse.json({
+        error: 'post 5 not found',
+        filesInFolder: files.map(f => ({ name: f.name, mimeType: f.mimeType })),
+      }, { status: 404 });
+    }
     console.log(`[Fix Yale] Found: ${imageFile.name} (${imageFile.mimeType})`);
 
     // 2. Download from Drive
