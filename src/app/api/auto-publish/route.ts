@@ -6,7 +6,7 @@ import { getDocumentContent, extractDriveFileId } from '@/lib/google-drive';
 import { processDocument, extractTitleFromContent } from '@/lib/document-processor';
 import { downloadFeaturedImage } from '@/lib/featured-image';
 import { uploadFeaturedImage } from '@/lib/featured-image';
-import { createPost, getOrCreateCategory, getOrCreateTags } from '@/lib/wordpress';
+import { createPost, updatePost, getOrCreateCategory, getOrCreateTags } from '@/lib/wordpress';
 import { DocumentMetadata, WordPressPost } from '@/types';
 
 // Status values that trigger auto-publish
@@ -19,6 +19,28 @@ function generateSlug(title: string): string {
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .trim();
+}
+
+/**
+ * Parses a date string from the sheet (various formats) into ISO format for WordPress.
+ * Returns undefined if the date can't be parsed.
+ */
+function parsePostDate(dateStr: string): string | undefined {
+  if (!dateStr) return undefined;
+
+  const trimmed = dateStr.trim();
+
+  // Try parsing with Date constructor (handles M/D/YYYY, YYYY-MM-DD, etc.)
+  const parsed = new Date(trimmed);
+  if (!isNaN(parsed.getTime())) {
+    // Format as YYYY-MM-DDTHH:MM:SS for WordPress
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}T12:00:00`;
+  }
+
+  return undefined;
 }
 
 interface PublishResult {
@@ -68,6 +90,7 @@ async function publishRow(
 
     // 2. Build metadata from sheet
     const sheetMetadata = sheetRowToMetadata(row);
+    const postDate = parsePostDate(row.postDate);
     const metadata: DocumentMetadata = {
       title: sheetMetadata.title || row.title || row.blogPost,
       slug: sheetMetadata.slug || generateSlug(sheetMetadata.title || row.title || row.blogPost),
@@ -76,13 +99,17 @@ async function publishRow(
       category: sheetMetadata.category || 'General',
       tags: sheetMetadata.tags || [],
       author: 'CommonCents Team',
-      publishDate: new Date().toISOString().split('T')[0],
+      publishDate: postDate || new Date().toISOString().split('T')[0],
       seoTitle: sheetMetadata.seoTitle || sheetMetadata.title,
       seoDescription: sheetMetadata.seoDescription || '',
       photoLink: sheetMetadata.photoLink,
       format: 'standard',
       metadataSource: 'sheet',
     };
+
+    if (postDate) {
+      console.log(`[Auto-publish Row ${row.rowIndex}] Using post date from sheet: ${postDate}`);
+    }
 
     // 3. Download and upload featured image
     let featuredMediaId: number | undefined;
@@ -113,13 +140,14 @@ async function publishRow(
     const categoryId = await getOrCreateCategory(metadata.category);
     const tagIds = metadata.tags.length > 0 ? await getOrCreateTags(metadata.tags) : [];
 
-    // 5. Create WordPress post
+    // 5. Create or update WordPress post
     const post: WordPressPost = {
       title: metadata.title,
       content,
       excerpt: metadata.excerpt,
       slug: metadata.slug,
       status: 'publish',
+      date: postDate,
       categories: [categoryId],
       tags: tagIds,
       featured_media: featuredMediaId,
@@ -130,7 +158,15 @@ async function publishRow(
       },
     };
 
-    const wpResult = await createPost(post);
+    let wpResult;
+    const existingWpId = row.wordpressId ? parseInt(row.wordpressId) : null;
+
+    if (existingWpId) {
+      console.log(`[Auto-publish Row ${row.rowIndex}] Updating existing post: WP ID ${existingWpId}`);
+      wpResult = await updatePost(existingWpId, post);
+    } else {
+      wpResult = await createPost(post);
+    }
 
     if (!wpResult.success || !wpResult.postId) {
       result.error = wpResult.error || 'WordPress publish failed';
