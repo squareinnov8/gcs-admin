@@ -123,11 +123,13 @@ export function sheetRowsToDocuments(rows: SheetRow[]): Document[] {
     .map((row) => {
       // Determine status based on sheet data
       let status: Document['status'] = 'pending';
-      const sheetStatus = row.status.toLowerCase();
+      const sheetStatus = row.status.toLowerCase().replace(/\s+/g, '');
 
-      if (row.wordpressId || sheetStatus === 'published' || sheetStatus === 'live') {
+      if (row.wordpressId || sheetStatus === 'published' || sheetStatus === 'posted' || sheetStatus === 'live') {
         status = 'published';
-      } else if (sheetStatus === 'draft' || sheetStatus === 'ready') {
+      } else if (sheetStatus === 'draft') {
+        status = 'processed';
+      } else if (sheetStatus === 'ready' || sheetStatus === 'readytopost') {
         status = 'processed';
       }
 
@@ -135,8 +137,8 @@ export function sheetRowsToDocuments(rows: SheetRow[]): Document[] {
         id: `sheet-${row.rowIndex}`, // Unique ID based on row
         name: row.blogPost || row.title,
         mimeType: 'application/vnd.google-apps.document', // Assume Google Doc
-        createdTime: new Date().toISOString(),
-        modifiedTime: new Date().toISOString(),
+        createdTime: row.postDate ? new Date(row.postDate).toISOString() : new Date().toISOString(),
+        modifiedTime: row.postDate ? new Date(row.postDate).toISOString() : new Date().toISOString(),
         status,
         wpPostId: row.wordpressId ? parseInt(row.wordpressId) : undefined,
         wpPostUrl: row.blogLink || undefined,
