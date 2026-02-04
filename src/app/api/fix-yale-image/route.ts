@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions, getAccessTokenFromRefreshToken } from '@/lib/auth';
-import { getDriveClient } from '@/lib/google-drive';
-import { downloadFile } from '@/lib/google-drive';
+import { downloadFile, getFileMetadata } from '@/lib/google-drive';
 import { uploadFeaturedImage } from '@/lib/featured-image';
 import { updatePost } from '@/lib/wordpress';
 
-const YALE_FOLDER_ID = '1n7eude0AxAqj2n_2b9hu_ROJPdPVbo_g';
+const IMAGE_FILE_ID = '1vqwSD9kGvPWaFuMeq-EIceoCfnjGepI1';
 const YALE_WP_POST_ID = 1164;
 
 /**
- * GET /api/fix-yale-image - Find "post 5.jpg" in the Yale folder,
- * upload to WordPress, and attach to the Yale post.
+ * GET /api/fix-yale-image - Upload specific image to Yale post
  */
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -26,31 +24,16 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 1. List all files in the folder
-    const drive = await getDriveClient(accessToken);
-    const response = await drive.files.list({
-      q: `'${YALE_FOLDER_ID}' in parents and trashed = false`,
-      fields: 'files(id, name, mimeType)',
-    });
-
-    const files = response.data.files || [];
-
-    // Find "post 5" (case-insensitive)
-    const imageFile = files.find(f => f.name?.toLowerCase().includes('post 5'));
-    if (!imageFile) {
-      return NextResponse.json({
-        error: 'post 5 not found',
-        filesInFolder: files.map(f => ({ name: f.name, mimeType: f.mimeType })),
-      }, { status: 404 });
-    }
-    console.log(`[Fix Yale] Found: ${imageFile.name} (${imageFile.mimeType})`);
+    // 1. Get file metadata
+    const metadata = await getFileMetadata(accessToken, IMAGE_FILE_ID);
+    console.log(`[Fix Yale] Downloading: ${metadata.name} (${metadata.mimeType})`);
 
     // 2. Download from Drive
-    const imageBuffer = await downloadFile(accessToken, imageFile.id!);
+    const imageBuffer = await downloadFile(accessToken, IMAGE_FILE_ID);
     const base64Data = imageBuffer.toString('base64');
 
     // 3. Upload to WordPress
-    const uploadResult = await uploadFeaturedImage(base64Data, imageFile.name!, imageFile.mimeType!);
+    const uploadResult = await uploadFeaturedImage(base64Data, metadata.name, metadata.mimeType);
     if (!uploadResult.success || !uploadResult.mediaId) {
       return NextResponse.json({ error: `Upload failed: ${uploadResult.error}` }, { status: 500 });
     }
@@ -72,7 +55,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Updated Yale post with "${imageFile.name}"`,
+      message: `Updated Yale post with "${metadata.name}"`,
       mediaId: uploadResult.mediaId,
       mediaUrl: uploadResult.mediaUrl,
     });
