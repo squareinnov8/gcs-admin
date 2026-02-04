@@ -7,7 +7,7 @@ const SHEET_ID = process.env.GOOGLE_SHEETS_ID || '1L5KUiI3d0Wx-drx17Jq_xBSTUTSI9
 
 // Column mapping for "CommonCents Content Repo"
 // A=Blog Post (name), B=Title, C=Category, D=Meta Title, E=Meta Description,
-// F=Slug, G=Primary Keyword, H=Status, I=Featured Image Alt, J=Post Date,
+// F=Slug, G=Primary Keyword, H=Featured Image Alt, I=Status, J=Post Date,
 // K=Blog Link (Drive doc URL), L=Photo Link, M=WordPress ID
 export interface SheetRow {
   rowIndex: number;      // 1-based row index in sheet (for updates)
@@ -18,8 +18,8 @@ export interface SheetRow {
   metaDescription: string; // Column E
   slug: string;          // Column F
   primaryKeyword: string; // Column G
-  status: string;        // Column H
-  featuredImageAlt: string; // Column I
+  featuredImageAlt: string; // Column H
+  status: string;        // Column I
   postDate: string;      // Column J
   blogLink: string;      // Column K
   photoLink: string;     // Column L - Google Drive link to featured image
@@ -60,8 +60,8 @@ export async function getContentRepoData(accessToken: string): Promise<SheetRow[
       metaDescription: row[4] || '',
       slug: row[5] || '',
       primaryKeyword: row[6] || '',
-      status: row[7] || '',
-      featuredImageAlt: row[8] || '',
+      featuredImageAlt: row[7] || '',
+      status: row[8] || '',
       postDate: row[9] || '',
       blogLink: row[10] || '',
       photoLink: row[11] || '',
@@ -75,8 +75,7 @@ export async function getContentRepoData(accessToken: string): Promise<SheetRow[
 
 /**
  * Updates a row's status and WordPress ID after publishing
- * Column H = Status, Column M = WordPress ID
- * (Column K contains the Drive doc link - don't overwrite it)
+ * Column I = Status, Column M = WordPress ID
  */
 export async function updateRowAfterPublish(
   accessToken: string,
@@ -87,10 +86,10 @@ export async function updateRowAfterPublish(
   const sheets = await getSheetsClient(accessToken);
 
   try {
-    // Update columns H (status) and M (WordPress ID)
+    // Update columns I (status) and M (WordPress ID)
     const updates: { range: string; values: string[][] }[] = [
       {
-        range: `H${rowIndex}`,
+        range: `I${rowIndex}`,
         values: [[status]],
       },
       {
